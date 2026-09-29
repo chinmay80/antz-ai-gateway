@@ -1,0 +1,16 @@
+# secrets
+.env
+
+# python
+.venv/
+__pycache__/
+*.pyc
+
+# php
+vendor/
+
+# runtime
+logs/
+
+# os
+.DS_Store

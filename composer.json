@@ -1,0 +1,16 @@
+{
+    "name": "chinmay/antz-ai-gateway",
+    "description": "ftgtg",
+    "autoload": {
+        "psr-4": {
+            "Chinmay\\AntzAiGateway\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Chinmay Hegde",
+            "email": "chinmay@lifesciencetrust.com"
+        }
+    ],
+    "require": {}
+}

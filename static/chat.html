@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antz assistant – test page</title>
+<style>
+  :root { --bg:#f5f7f4; --panel:#fff; --ink:#1f2a24; --muted:#5f6f66; --brand:#2f6b4f; --me:#e3efe8; --line:#d8e0da; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+  main { max-width:640px; margin:0 auto; height:100vh; display:flex; flex-direction:column; padding:16px; }
+  h1 { font-size:18px; margin:0 0 12px; }
+  #log { flex:1; overflow-y:auto; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px; }
+  .msg { margin:0 0 10px; padding:8px 12px; border-radius:8px; white-space:pre-wrap; max-width:85%; }
+  .user { background:var(--me); margin-left:auto; }
+  .assistant { background:#f0f2f0; }
+  .error { color:#9b2c2c; }
+  form { display:flex; gap:8px; margin-top:12px; }
+  input { flex:1; padding:10px 12px; border:1px solid var(--line); border-radius:8px; font:inherit; }
+  button { padding:10px 16px; border:0; border-radius:8px; background:var(--brand); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  :focus-visible { outline:2px solid var(--brand); outline-offset:2px; }
+  .hint { color:var(--muted); font-size:13px; margin-top:6px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Antz assistant</h1>
+  <div id="log" aria-live="polite"></div>
+  <form id="f">
+    <input id="q" placeholder="Ask about Antz, e.g. how do I report an incident?" autocomplete="off" required>
+    <button id="send">Send</button>
+  </form>
+  <p class="hint">Test page for the AI gateway. Paste an Antz token below to test real auth.</p>
+  <input id="token" placeholder="Bearer token (optional)">
+</main>
+<script>
+const log = document.getElementById('log');
+const history = [];
+
+function bubble(role, text) {
+  const d = document.createElement('div');
+  d.className = 'msg ' + role;
+  d.textContent = text;
+  log.appendChild(d);
+  log.scrollTop = log.scrollHeight;
+  return d;
+}
+
+document.getElementById('f').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = document.getElementById('q');
+  const send = document.getElementById('send');
+  const text = q.value.trim();
+  if (!text) return;
+  q.value = '';
+  send.disabled = true;
+  history.push({ role: 'user', content: text });
+  bubble('user', text);
+  const out = bubble('assistant', '');
+
+  const headers = { 'Content-Type': 'application/json' };
+  const token = document.getElementById('token').value.trim();
+  if (token) headers['Authorization'] = token.startsWith('Bearer ') ? token : 'Bearer ' + token;
+
+  let answer = '';
+  try {
+    const resp = await fetch('/chat', {
+      method: 'POST', headers,
+      body: JSON.stringify({ messages: history, screen: 'test-page', platform: 'web' }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Request failed (' + resp.status + ')');
+    }
+    // SSE over POST: read the stream and split on blank lines.
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 2);
+        if (!line.startsWith('data: ')) continue;
+        const ev = JSON.parse(line.slice(6));
+        if (ev.type === 'delta') { answer += ev.text; out.textContent = answer; log.scrollTop = log.scrollHeight; }
+        if (ev.type === 'error') { out.classList.add('error'); out.textContent = ev.message; }
+      }
+    }
+    if (answer) history.push({ role: 'assistant', content: answer });
+  } catch (err) {
+    out.classList.add('error');
+    out.textContent = err.message;
+    history.pop();
+  } finally {
+    send.disabled = false;
+    q.focus();
+  }
+});
+</script>
+</body>
+</html>
